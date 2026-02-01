@@ -32,15 +32,14 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  // Forecast usa globalIdLocal
   final controllerLocationId = TextEditingController(text: '1010500');
-  // Current usa stationId
   final controllerStationId = TextEditingController(text: '1210604');
 
   String _logText = '';
 
   void _appendLog(String text) {
     _logText += '$text\n';
+    debugPrint(text);
     setState(() {});
   }
 
@@ -59,8 +58,69 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   int? _parseInt(String s) {
-    final v = int.tryParse(s.trim());
-    return v;
+    return int.tryParse(s.trim());
+  }
+
+  Widget _iconAsset(String iconFile) {
+    if (iconFile.isEmpty || iconFile == '—') {
+      return const SizedBox(width: 40, height: 40);
+    }
+    return Image.asset(
+      'assets/icons/$iconFile',
+      width: 40,
+      height: 40,
+      errorBuilder: (_, __, ___) => const SizedBox(width: 40, height: 40),
+    );
+  }
+
+  Future<void> _showForecastDialog(List<dynamic> decoded) async {
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          title: const Text('Previsão 5 dias'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: decoded.length,
+              itemBuilder: (context, i) {
+                final m = decoded[i] as Map<String, dynamic>;
+
+                final date = _pick(m, ['forecastDate'], fallback: '—');
+                final tMin = _pick(m, ['tMin'], fallback: '—');
+                final tMax = _pick(m, ['tMax'], fallback: '—');
+                final rainProb = _pick(m, ['precipitaProb'], fallback: '—');
+                final weatherType = _pick(m, ['weatherType'], fallback: '—');
+                final windSpeed = _pick(m, ['windSpeed'], fallback: '—');
+                final windDir = _pick(m, ['predWindDir'], fallback: '—');
+                final rainDesc = _pick(m, ['rainIntensityDesc'], fallback: '');
+                final icon = _pick(m, ['icon'], fallback: '');
+
+                final subtitle = StringBuffer()
+                  ..write('$date | Min:$tMin Max:$tMax')
+                  ..write(' | Chuva:$rainProb%')
+                  ..write(rainDesc.isNotEmpty ? ' ($rainDesc)' : '')
+                  ..write(' | Vento:$windSpeed $windDir');
+
+                return ListTile(
+                  leading: _iconAsset(icon),
+                  title: Text(weatherType),
+                  subtitle: Text(subtitle.toString()),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Fechar'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -74,9 +134,6 @@ class _MyHomePageState extends State<MyHomePage> {
             CustomContainerGroup(
               child: Column(
                 children: [
-                  // =========================
-                  // LOCAIS (globalIdLocal)
-                  // =========================
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -110,12 +167,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 8),
-
-                  // =========================
-                  // ESTAÇÕES (stationId)
-                  // =========================
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -149,12 +201,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
-                  // =========================
-                  // INPUTS
-                  // =========================
                   Row(
                     children: [
                       const Text('   LocationId (forecast):'),
@@ -182,12 +229,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
-                  // =========================
-                  // TEMPO ATUAL -> stationId
-                  // =========================
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -213,20 +255,20 @@ class _MyHomePageState extends State<MyHomePage> {
                                   return;
                                 }
 
-                                final temp = _pick(obj, ['temperature', 'temp', 'Temperature'], fallback: '—');
-                                final hum = _pick(obj, ['humidity', 'rh', 'Humidity'], fallback: '—');
+                                final local = _pick(obj, ['local', 'Local'], fallback: '—');
+                                final temp = _pick(obj, ['temperature', 'Temperature'], fallback: '—');
+                                final hum = _pick(obj, ['humidity', 'Humidity'], fallback: '—');
+                                final windKmh = _pick(obj, ['windSpeed', 'WindSpeed'], fallback: '—');
+                                final windDir = _pick(obj, ['windDirection', 'WindDirection'], fallback: '—');
+                                final windDesc = _pick(obj, ['windDescription', 'WindDescription'], fallback: '');
+                                final prec = _pick(obj, ['precipitationAccumulated', 'PrecipitationAccumulated'], fallback: '—');
+                                final rad = _pick(obj, ['radiation', 'Radiation'], fallback: '—');
 
-                                final windKm =
-                                _pick(obj, ['windIntensityKm', 'windSpeedKm', 'windSpeed'], fallback: '—');
-                                final windDir = _pick(obj, ['windDirection', 'WindDirection', 'windDir'], fallback: '—');
-
-                                final prec = _pick(obj, ['precAcumulated', 'precAcumulada', 'precAccumulated'], fallback: '—');
-                                final rad = _pick(obj, ['radiation', 'rad', 'Radiation'], fallback: '—');
-
+                                _appendLog('Local: $local');
                                 _appendLog('Temperatura: $temp °C');
                                 _appendLog('Humidade: $hum %');
                                 _appendLog('Chuva acumulada: $prec');
-                                _appendLog('Vento: $windKm | Direção: $windDir');
+                                _appendLog('Vento: $windKmh km/h | Direção: $windDir${windDesc.isNotEmpty ? ' | $windDesc' : ''}');
                                 _appendLog('Radiação/UV: $rad');
                               } catch (_) {
                                 _appendLog(res);
@@ -238,12 +280,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 8),
-
-                  // =========================
-                  // PREVISÃO 5 DIAS -> globalIdLocal
-                  // =========================
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -263,24 +300,37 @@ class _MyHomePageState extends State<MyHomePage> {
                               _appendLog('\n== PREVISÃO 5 DIAS (locationId $id) ==');
 
                               try {
-                                final list = json.decode(res) as List<dynamic>;
+                                final decoded = json.decode(res);
+                                if (decoded is! List) {
+                                  _appendLog(res);
+                                  return;
+                                }
 
-                                for (final day in list) {
+                                for (final day in decoded) {
                                   final m = day as Map<String, dynamic>;
 
+                                  final date = _pick(m, ['forecastDate'], fallback: '—');
+                                  final tMin = _pick(m, ['tMin'], fallback: '—');
+                                  final tMax = _pick(m, ['tMax'], fallback: '—');
+                                  final rainProb = _pick(m, ['precipitaProb'], fallback: '—');
+                                  final weatherType = _pick(m, ['weatherType'], fallback: '—');
+                                  final windSpeed = _pick(m, ['windSpeed'], fallback: '—');
+                                  final windDir = _pick(m, ['predWindDir'], fallback: '—');
+                                  final rainDesc = _pick(m, ['rainIntensityDesc'], fallback: '');
+                                  final icon = _pick(m, ['icon'], fallback: '');
+
                                   _appendLog(
-                                      '${m['forecastDate']} '
-                                          '| Min:${m['tMin']} Max:${m['tMax']} '
-                                          '| Chuva:${m['precipitaProb']}% '
-                                          '| Vento:${m['windSpeed']} ${m['predWindDir']} '
-                                          '| icon:${m['icon']}'
+                                    '$date | $weatherType | Min:$tMin Max:$tMax '
+                                        '| Chuva:$rainProb%${rainDesc.isNotEmpty ? ' ($rainDesc)' : ''} '
+                                        '| Vento:$windSpeed $windDir | icon:$icon',
                                   );
                                 }
+
+                                await _showForecastDialog(decoded);
                               } catch (_) {
                                 _appendLog(res);
                               }
                             },
-
                             child: const Text('OBTER PREVISÃO 5 DIAS'),
                           ),
                         ),
@@ -290,12 +340,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 ],
               ),
             ),
-
             const SizedBox(height: 8),
-
-            // =========================
-            // LOG
-            // =========================
             Expanded(
               child: CustomContainerGroup(
                 child: Column(
