@@ -32,7 +32,11 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final controllerLocationId = TextEditingController(text: '1010500'); // ex: Aveiro
+  // Forecast usa globalIdLocal
+  final controllerLocationId = TextEditingController(text: '1010500');
+  // Current usa stationId
+  final controllerStationId = TextEditingController(text: '1210604');
+
   String _logText = '';
 
   void _appendLog(String text) {
@@ -43,7 +47,20 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void dispose() {
     controllerLocationId.dispose();
+    controllerStationId.dispose();
     super.dispose();
+  }
+
+  String _pick(Map<String, dynamic> obj, List<String> keys, {String fallback = ''}) {
+    for (final k in keys) {
+      if (obj.containsKey(k) && obj[k] != null) return obj[k].toString();
+    }
+    return fallback;
+  }
+
+  int? _parseInt(String s) {
+    final v = int.tryParse(s.trim());
+    return v;
   }
 
   @override
@@ -54,12 +71,12 @@ class _MyHomePageState extends State<MyHomePage> {
       body: CustomContainerMain(
         child: Column(
           children: [
-            // =========================
-            // BOTÕES
-            // =========================
             CustomContainerGroup(
               child: Column(
                 children: [
+                  // =========================
+                  // LOCAIS (globalIdLocal)
+                  // =========================
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -70,15 +87,20 @@ class _MyHomePageState extends State<MyHomePage> {
                             style: CustomButtonStyle.buttonStyle,
                             onPressed: () async {
                               final res = await Communication.getLocations();
-                              _appendLog('\n== LOCAIS ==');
+                              _appendLog('\n== LOCAIS (globalIdLocal) ==');
 
                               try {
-                                final list = json.decode(res) as List<dynamic>;
-                                for (final item in list.take(20)) {
-                                  _appendLog('ID: ${item['globalIdLocal']} | Local: ${item['local']}');
+                                final decoded = json.decode(res);
+                                if (decoded is List) {
+                                  for (final item in decoded) {
+                                    final m = item as Map<String, dynamic>;
+                                    _appendLog('ID: ${m['globalIdLocal']} | Local: ${m['local']}');
+                                  }
+                                  _appendLog('Total: ${decoded.length} locais');
+                                } else {
+                                  _appendLog(res);
                                 }
-                                _appendLog('... (mostrados 20)');
-                              } on FormatException {
+                              } catch (_) {
                                 _appendLog(res);
                               }
                             },
@@ -88,12 +110,54 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
 
-                  // Input LocationId
+                  const SizedBox(height: 8),
+
+                  // =========================
+                  // ESTAÇÕES (stationId)
+                  // =========================
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: FractionallySizedBox(
+                          widthFactor: 0.95,
+                          child: ElevatedButton(
+                            style: CustomButtonStyle.buttonStyle,
+                            onPressed: () async {
+                              final res = await Communication.getStations();
+                              _appendLog('\n== ESTAÇÕES (stationId) ==');
+
+                              try {
+                                final decoded = json.decode(res);
+                                if (decoded is List) {
+                                  for (final item in decoded.take(20)) {
+                                    final m = item as Map<String, dynamic>;
+                                    _appendLog('StationId: ${m['id']} | Nome: ${m['name']}');
+                                  }
+                                  _appendLog('... (mostradas 20)');
+                                } else {
+                                  _appendLog(res);
+                                }
+                              } catch (_) {
+                                _appendLog(res);
+                              }
+                            },
+                            child: const Text('OBTER ESTAÇÕES'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // =========================
+                  // INPUTS
+                  // =========================
                   Row(
                     children: [
-                      const Text('   LocationId:'),
+                      const Text('   LocationId (forecast):'),
                       const SizedBox(width: 10),
                       SizedBox(
                         width: 140,
@@ -104,8 +168,26 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text('   StationId (current):'),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 140,
+                        child: TextField(
+                          controller: controllerStationId,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
 
+                  const SizedBox(height: 12),
+
+                  // =========================
+                  // TEMPO ATUAL -> stationId
+                  // =========================
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -115,20 +197,38 @@ class _MyHomePageState extends State<MyHomePage> {
                           child: ElevatedButton(
                             style: CustomButtonStyle.buttonStyle,
                             onPressed: () async {
-                              final id = int.tryParse(controllerLocationId.text) ?? -1;
-                              final res = await Communication.getCurrent(id);
+                              final id = _parseInt(controllerStationId.text);
+                              if (id == null) {
+                                _appendLog('\nStationId inválido');
+                                return;
+                              }
 
-                              _appendLog('\n== TEMPO ATUAL ($id) ==');
+                              final res = await Communication.getCurrent(id);
+                              _appendLog('\n== TEMPO ATUAL (stationId $id) ==');
 
                               try {
-                                final obj = json.decode(res) as Map<String, dynamic>;
-                                _appendLog('Temperatura: ${obj['temperature']} °C');
-                                _appendLog('Humidade: ${obj['humidity']} %');
-                                _appendLog('Chuva acumulada: ${obj['precAcumulated']}');
-                                _appendLog('Vento (km/h): ${obj['windIntensityKm']}');
-                                _appendLog('Direção vento: ${obj['WindDirection'] ?? obj['windDirection']}');
-                                _appendLog('Radiação: ${obj['radiation']}');
-                              } on FormatException {
+                                final obj = json.decode(res);
+                                if (obj is! Map<String, dynamic>) {
+                                  _appendLog(res);
+                                  return;
+                                }
+
+                                final temp = _pick(obj, ['temperature', 'temp', 'Temperature'], fallback: '—');
+                                final hum = _pick(obj, ['humidity', 'rh', 'Humidity'], fallback: '—');
+
+                                final windKm =
+                                _pick(obj, ['windIntensityKm', 'windSpeedKm', 'windSpeed'], fallback: '—');
+                                final windDir = _pick(obj, ['windDirection', 'WindDirection', 'windDir'], fallback: '—');
+
+                                final prec = _pick(obj, ['precAcumulated', 'precAcumulada', 'precAccumulated'], fallback: '—');
+                                final rad = _pick(obj, ['radiation', 'rad', 'Radiation'], fallback: '—');
+
+                                _appendLog('Temperatura: $temp °C');
+                                _appendLog('Humidade: $hum %');
+                                _appendLog('Chuva acumulada: $prec');
+                                _appendLog('Vento: $windKm | Direção: $windDir');
+                                _appendLog('Radiação/UV: $rad');
+                              } catch (_) {
                                 _appendLog(res);
                               }
                             },
@@ -138,8 +238,12 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
 
+                  const SizedBox(height: 8),
+
+                  // =========================
+                  // PREVISÃO 5 DIAS -> globalIdLocal
+                  // =========================
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -149,21 +253,34 @@ class _MyHomePageState extends State<MyHomePage> {
                           child: ElevatedButton(
                             style: CustomButtonStyle.buttonStyle,
                             onPressed: () async {
-                              final id = int.tryParse(controllerLocationId.text) ?? -1;
-                              final res = await Communication.getForecast(id);
+                              final id = _parseInt(controllerLocationId.text);
+                              if (id == null) {
+                                _appendLog('\nLocationId inválido');
+                                return;
+                              }
 
-                              _appendLog('\n== PREVISÃO 5 DIAS ($id) ==');
+                              final res = await Communication.getForecast(id);
+                              _appendLog('\n== PREVISÃO 5 DIAS (locationId $id) ==');
 
                               try {
                                 final list = json.decode(res) as List<dynamic>;
+
                                 for (final day in list) {
+                                  final m = day as Map<String, dynamic>;
+
                                   _appendLog(
-                                      '${day['forecastDate']} | ${day['weatherType']} | Min:${day['tMin']} Max:${day['tMax']} | Chuva:${day['precipitaProb']}% | Vento:${day['windSpeed']} ${day['predWindDir']} | icon:${day['icon']}');
+                                      '${m['forecastDate']} '
+                                          '| Min:${m['tMin']} Max:${m['tMax']} '
+                                          '| Chuva:${m['precipitaProb']}% '
+                                          '| Vento:${m['windSpeed']} ${m['predWindDir']} '
+                                          '| icon:${m['icon']}'
+                                  );
                                 }
-                              } on FormatException {
+                              } catch (_) {
                                 _appendLog(res);
                               }
                             },
+
                             child: const Text('OBTER PREVISÃO 5 DIAS'),
                           ),
                         ),

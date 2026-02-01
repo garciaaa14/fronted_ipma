@@ -3,71 +3,48 @@ import 'package:http/http.dart' as http;
 
 class Communication {
   static String baseUrl = 'http://10.0.2.2:5292/api/weather';
-  static int timeoutSec = 5;
+  static int timeoutSec = 8;
 
   static Map<String, String> headersJson = {
-    'Content-Type': 'application/json; charset=utf-8',
     'Accept': 'application/json; charset=utf-8',
   };
 
-  // =========================
-  // LOCAIS
-  // =========================
   static Future<String> getLocations() async {
-    final url = '$baseUrl/locations';
-    try {
-      http.Response response =
-      await http.get(Uri.parse(url), headers: headersJson).timeout(Duration(seconds: timeoutSec));
-      return validateComm(response);
-    } on Exception {
-      return 'Não foi possível contactar o servidor';
-    }
+    return _get('$baseUrl/locations');
   }
 
-  // =========================
-  // TEMPO ATUAL
-  // =========================
-  static Future<String> getCurrent(int locationId) async {
-    final url = '$baseUrl/current/$locationId';
-    try {
-      http.Response response =
-      await http.get(Uri.parse(url), headers: headersJson).timeout(Duration(seconds: timeoutSec));
-      return validateComm(response);
-    } on Exception {
-      return 'Não foi possível contactar o servidor';
-    }
+  static Future<String> getStations() async {
+    return _get('$baseUrl/stations');
   }
 
-  // =========================
-  // PREVISÃO 5 DIAS
-  // =========================
+  // Aqui estás a passar stationId (mesmo que a variável se chame locationId)
+  static Future<String> getCurrent(int stationId) async {
+    return _get('$baseUrl/current/$stationId');
+  }
+
   static Future<String> getForecast(int locationId) async {
-    final url = '$baseUrl/forecast/$locationId';
+    return _get('$baseUrl/forecast/$locationId');
+  }
+
+  static Future<String> _get(String url) async {
     try {
-      http.Response response =
-      await http.get(Uri.parse(url), headers: headersJson).timeout(Duration(seconds: timeoutSec));
+      final response = await http
+          .get(Uri.parse(url), headers: headersJson)
+          .timeout(Duration(seconds: timeoutSec));
       return validateComm(response);
     } on Exception {
       return 'Não foi possível contactar o servidor';
     }
   }
 
-  // =========================
-  // VALIDAR RESPOSTA
-  // =========================
   static String validateComm(http.Response response) {
     if (response.statusCode == 200) {
       return response.body;
-    } else if (response.statusCode == 404) {
-      return 'Não foi encontrada uma forma para responder ao pedido (404)';
-    } else if (response.statusCode == 400) {
-      return response.body.toString();
-    } else if (response.statusCode == 405) {
-      return 'Pedido não permitido (405)';
-    } else if (response.statusCode == 415) {
-      return 'Pedido com dados enviados no formato errado (415)';
-    } else {
-      return 'Erro ${response.statusCode}';
     }
+    if (response.statusCode == 404) return 'Não encontrado (404)';
+    if (response.statusCode == 400) return response.body.toString();
+    if (response.statusCode == 405) return 'Pedido não permitido (405)';
+    if (response.statusCode == 415) return 'Formato errado (415)';
+    return 'Erro ${response.statusCode}';
   }
 }
